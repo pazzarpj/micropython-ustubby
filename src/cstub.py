@@ -20,7 +20,7 @@ type_handler = {
     set: string_template(
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;"
-    )
+                            )
 }
 
 
@@ -35,7 +35,7 @@ def stub_function(f):
     stub_ret.append(ret_val_return(sig.return_annotation))
     stub_ret.append("}")
     # C Function Definition
-    stub_ret.append(function_reference(f"{f.__module__}_{f.__name__}", sig.parameters))
+    stub_ret.append(function_reference(f, f"{f.__module__}_{f.__name__}", sig.parameters))
     return stub_ret
 
 
@@ -100,17 +100,34 @@ def ret_val_return(ret_type):
 
 
 def function_params(params):
+    pass
     if len(params) == 0:
         return "() {"
-    if len(params) < 4:
+    simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
+    if simple and len(params) < 4:
         params = ", ".join([f"mp_object {x}_obj" for x in params])
         return params + ") {"
-    else:
+    elif simple:
         return "size_t n_args, const mp_obj_t *args) {"
+    else:
+        # Complex case
+        return "size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {"
+
+
+def kw_enum(params):
+    return f"{{ {', '.join(['ARG_' + k for k in params])} }}"
 
 
 def parse_params(params):
-    return [type_handler[value.annotation](param) for param, value in params.items()]
+    """
+    :param params: Parameter signature from inspect.signature
+    :return: list of strings defining the parsed parameters in c
+    """
+    simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
+    if simple:
+        return [type_handler[value.annotation](param) for param, value in params.items()]
+    else:
+        return kw_enum(params)
 
 
 def headers():
@@ -137,11 +154,14 @@ def code():
     return "\n\t// your code here\n"
 
 
-def function_reference(name, params):
-    if len(params) < 4:
+def function_reference(f, name, params):
+    simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
+    if simple and len(params) < 4:
         return f"MP_DEFINE_CONST_FUN_OBJ_{len(params)}({name}_obj, {name});"
-    else:
+    elif simple:
         return f"MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN({name}_obj, {len(params)}, {len(params)}, {name});"
+    else:
+        return f"MP_DEFINE_CONST_FUN_OBJ_KW({f.__module__}_{f.__name__}_obj, 1, {f.__module__}_{f.__name__}_readfrom_mem);"
 
 
 if __name__ == "__main__":
