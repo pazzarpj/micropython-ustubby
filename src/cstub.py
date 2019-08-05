@@ -19,8 +19,7 @@ type_handler = {
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     set: string_template(
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
-    object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;"
-                            )
+    object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
 }
 
 
@@ -29,12 +28,13 @@ def stub_function(f):
     stub_ret = [function_comments(f), function_init(f"{f.__module__}_{f.__name__}")]
     sig = inspect.signature(f)
     stub_ret[-1] += function_params(sig.parameters)
-    stub_ret.extend(parse_params(sig.parameters))
+    stub_ret.extend(parse_params(f, sig.parameters))
     stub_ret.append(ret_val_init(sig.return_annotation))
     stub_ret.append(code())
     stub_ret.append(ret_val_return(sig.return_annotation))
     stub_ret.append("}")
     # C Function Definition
+    stub_ret.append("")
     stub_ret.append(function_reference(f, f"{f.__module__}_{f.__name__}", sig.parameters))
     return stub_ret
 
@@ -46,12 +46,14 @@ def stub_module(mod):
     for func in functions:
         stub_ret.extend(stub_function(func))
     # Set up the module properties
+    stub_ret.append("")
     stub_ret.append(f"STATIC const mp_rom_map_elem_t {mod.__name__}_module_globals_table[] = {{")
     stub_ret.append(f"\t{{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_example) }},")
     stub_ret.extend(
         [f"\t{{ MP_ROM_QSTR(MP_QSTR_{f.__name__}), MP_ROM_PTR(&{mod.__name__}_{f.__name__}_obj) }}," for f in
          functions])
     stub_ret.append("};")
+    stub_ret.append("")
     stub_ret.append(f"STATIC MP_DEFINE_CONST_DICT({mod.__name__}_module_globals, {mod.__name__}_module_globals_table);")
     # Define the module object
     stub_ret.append(f"const mp_obj_module_t {mod.__name__}user_cmodule = {{")
@@ -59,6 +61,7 @@ def stub_module(mod):
     stub_ret.append(f"\t.globals = (mp_obj_dict_t*)&{mod.__name__}_module_globals,")
     stub_ret.append("};")
     # Register the module
+    stub_ret.append("")
     stub_ret.append(
         f"MP_REGISTER_MODULE(MP_QSTR_example, {mod.__name__}_user_cmodule, MODULE_{mod.__name__.upper()}_ENABLED);")
     return "\n".join(stub_ret)
@@ -115,10 +118,50 @@ def function_params(params):
 
 
 def kw_enum(params):
-    return f"{{ {', '.join(['ARG_' + k for k in params])} }}"
+    return f"\tenum {{ {', '.join(['ARG_' + k for k in params])} }}"
 
 
-def parse_params(params):
+shortened_types = {
+    int: "int",
+    object: "obj",
+    None: "NULL",
+    bool: "false"
+
+}
+
+defaults = {
+    int: "0",
+    float: "0",
+    None: "MP_OBJ_NULL",
+    object: "MP_OBJ_NULL",
+
+}
+
+
+def kw_allowed_args(f, params):
+    args = []
+    for name, param in params.items():
+        if param.kind in [param.POSITIONAL_OR_KEYWORD, param.POSITIONAL_ONLY]:
+            arg_type = "MP_ARG_REQUIRED"
+        else:
+            arg_type = "MP_ARG_KW_ONLY"
+        type_txt = shortened_types[param.annotation]
+        if param.default is inspect._empty:
+            default = defaults[param.annotation]
+        else:
+            default = param.default
+        args.append(f"{{ MP_QSTR_{name}, {arg_type} | MP_ARG_{type_txt.upper()}, {{ .u_{type_txt} = {default} }} }},")
+    args = "\n\t\t".join(args)
+    return f"\tSTATIC const mp_arg_t {f.__module__}_{f.__name__}_allowed_args[] = {{\n\t\t{args} \n\t}};"
+
+
+def arg_array(f):
+    return f"\tmp_arg_val_t args[MP_ARRAY_SIZE({f.__module__}_{f.__name__}_allowed_args)];\n" \
+        f"\tmp_arg_parse_all(n_args - 1, pos_args + 1, kw_args,\n" \
+        f"\t\tMP_ARRAY_SIZE({f.__module__}_{f.__name__}_allowed_args), machine_i2c_mem_allowed_args, args);"
+
+
+def parse_params(f, params):
     """
     :param params: Parameter signature from inspect.signature
     :return: list of strings defining the parsed parameters in c
@@ -127,7 +170,7 @@ def parse_params(params):
     if simple:
         return [type_handler[value.annotation](param) for param, value in params.items()]
     else:
-        return kw_enum(params)
+        return [kw_enum(params), kw_allowed_args(f, params), arg_array(f)]
 
 
 def headers():
