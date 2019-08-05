@@ -1,36 +1,6 @@
 import inspect
 
 
-def stub(f):
-    return """// Include required definitions first.
-#include "py/obj.h"
-#include "py/runtime.h"
-#include "py/builtin.h"
-
-// This is the function which will be called from Python as example.add_ints(a, b).
-STATIC mp_obj_t example_add_ints(mp_obj_t a_obj, mp_obj_t b_obj) {
-    // Extract the ints from the micropython input objects
-    int a = mp_obj_get_int(a_obj);
-    int b = mp_obj_get_int(b_obj);
-
-    // Calculate the addition and convert to MicroPython object.
-    return mp_obj_new_int(a + b);
-}
-// Define a Python reference to the function above
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(example_add_ints_obj, example_add_ints);
-
-// Define all properties of the example module.
-// Table entries are key/value pairs of the attribute name (a string)
-// and the MicroPython object reference.
-// All identifiers and strings are written as MP_QSTR_xxx and will be
-// optimized to word-sized integers by the build system (interned strings).
-STATIC const mp_rom_map_elem_t example_module_globals_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_example) },
-    { MP_ROM_QSTR(MP_QSTR_add_ints), MP_ROM_PTR(&example_add_ints_obj) },
-};
-"""
-
-
 def string_template(base_str):
     def string_handle(*args, **kwargs):
         return base_str.format(*args, **kwargs)
@@ -52,19 +22,43 @@ type_handler = {
 }
 
 
-def stub(f):
-    stub_ret = []
-    stub_ret.append(headers())
-    stub_ret.append(function_comments(f))
-    stub_ret.append(function_init(f.__name__))
+def stub_function(f):
+    # Function implementation
+    stub_ret = [function_comments(f), function_init(f"{f.__module__}_{f.__name__}")]
     sig = inspect.signature(f)
-    stub_ret.append(function_params(sig.parameters))
+    stub_ret[-1] += function_params(sig.parameters)
     stub_ret.extend(parse_params(sig.parameters))
     stub_ret.append(ret_val_init(sig.return_annotation))
     stub_ret.append(code())
     stub_ret.append(ret_val_return(sig.return_annotation))
     stub_ret.append("}")
+    # C Function Definition
+    stub_ret.append(function_reference(f"{f.__module__}_{f.__name__}", sig.parameters))
+    return stub_ret
 
+
+def stub_module(mod):
+    stub_ret = [headers()]
+    functions = [o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])]
+    # Define the functions
+    for func in functions:
+        stub_ret.extend(stub_function(func))
+    # Set up the module properties
+    stub_ret.append(f"STATIC const mp_rom_map_elem_t {mod.__name__}_module_globals_table[] = {{")
+    stub_ret.append(f"\t{{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_example) }},")
+    stub_ret.extend(
+        [f"\t{{ MP_ROM_QSTR(MP_QSTR_{f.__name__}), MP_ROM_PTR(&{mod.__name__}_{f.__name__}_obj) }}," for f in
+         functions])
+    stub_ret.append("};")
+    stub_ret.append(f"STATIC MP_DEFINE_CONST_DICT({mod.__name__}_module_globals, {mod.__name__}_module_globals_table);")
+    # Define the module object
+    stub_ret.append(f"const mp_obj_module_t {mod.__name__}user_cmodule = {{")
+    stub_ret.append(f"\t.base = {{&mp_type_module}},")
+    stub_ret.append(f"\t.globals = (mp_obj_dict_t*)&{mod.__name__}_module_globals,")
+    stub_ret.append("};")
+    # Register the module
+    stub_ret.append(
+        f"MP_REGISTER_MODULE(MP_QSTR_example, {mod.__name__}_user_cmodule, MODULE_{mod.__name__.upper()}_ENABLED);")
     return "\n".join(stub_ret)
 
 
@@ -107,15 +101,14 @@ def function_params(params):
     if len(params) == 0:
         return "() {"
     if len(params) < 4:
-        params = "\t" + ", ".join([f"mp_object {x}_obj" for x in params])
+        params = ", ".join([f"mp_object {x}_obj" for x in params])
         return params + ") {"
     else:
-        return "\tsize_t n_args, const mp_obj_t *args) {"
+        return "size_t n_args, const mp_obj_t *args) {"
 
 
 def parse_params(params):
-    return [type_handler[value.annotation](param) for param, value in
-            params.items()]
+    return [type_handler[value.annotation](param) for param, value in params.items()]
 
 
 def headers():
@@ -127,21 +120,35 @@ def headers():
 
 
 def function_comments(f):
-    return "/*" + '\n'.join([line.strip() for line in f.__doc__.splitlines()]) + "/*"
+    """
+    Uses single line comments as we can't know if there are string escapes such as /* in the code
+    :param f:
+    :return:
+    """
+    return '\n'.join(["//" + line.strip() for line in f.__doc__.splitlines()])
 
 
 def code():
     return "\n\t// your code here\n"
 
 
+def function_reference(name, params):
+    if len(params) < 4:
+        return f"MP_DEFINE_CONST_FUN_OBJ_{len(params)}({name}_obj, {name});"
+    else:
+        return f"MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN({name}_obj, {len(params)}, {len(params)}, {name});"
+
+
 if __name__ == "__main__":
-    def add_ints(a: int, b: str) -> int:
-        """
-        Adds two integers
-        :param a:
-        :param b:
-        :return:
-        """
+    import example
 
+    # def add_ints(a: int, b: str, c: float, d: tuple) -> int:
+    #     """
+    #     Adds two integers
+    #     :param a:
+    #     :param b:
+    #     :return:
+    #     """
 
-    print(stub(add_ints))
+    # print("\n".join(stub_function(example.add_ints)))
+    print(stub_module(example))
