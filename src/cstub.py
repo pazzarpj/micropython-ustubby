@@ -19,6 +19,8 @@ type_handler = {
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     set: string_template(
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+    object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;"
+    )
 }
 
 
@@ -125,7 +127,10 @@ def function_comments(f):
     :param f:
     :return:
     """
-    return '\n'.join(["//" + line.strip() for line in f.__doc__.splitlines()])
+    try:
+        return '\n'.join(["//" + line.strip() for line in f.__doc__.splitlines()])
+    except AttributeError:
+        return "// No Comment"
 
 
 def code():
