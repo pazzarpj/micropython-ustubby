@@ -50,7 +50,7 @@ def stub_function(f):
     stub_ret.append("}")
     # C Function Definition
     stub_ret.append(function_reference(f, f"{f.__module__}_{f.__name__}", sig.parameters))
-    return expand_newlines(stub_ret)
+    return "\n".join(expand_newlines(stub_ret))
 
 
 def stub_module(mod):
@@ -60,7 +60,7 @@ def stub_module(mod):
     functions.extend([o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])])
     # Define the functions
     for func in functions:
-        stub_ret.extend(stub_function(func))
+        stub_ret.append(stub_function(func))
     # Set up the module properties
     stub_ret.append("")
     stub_ret.append(f"STATIC const mp_rom_map_elem_t {mod.__name__}_module_globals_table[] = {{")
@@ -262,8 +262,8 @@ csr_types = {
 }
 
 
-def parse_csv(path):
-    mod = types.ModuleType("csr")
+def parse_csv(path, module_name="csr"):
+    mod = types.ModuleType(module_name)
     with open(path) as f:
         reader = csv.reader(filter_comments(f))
         for csr_type, func_name, address, length, access_control in reader:
@@ -271,5 +271,4 @@ def parse_csv(path):
                 funcs = csr_types[csr_type](func_name, address, length, access_control, mod)
                 for func in funcs:
                     setattr(mod, func.__name__, func)
-                    # print(func)
     return mod
