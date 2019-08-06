@@ -1,4 +1,6 @@
 import inspect
+import types
+import csv
 
 
 def string_template(base_str):
@@ -36,9 +38,11 @@ def stub_function(f):
     sig = inspect.signature(f)
     stub_ret[-1] += function_params(sig.parameters)
     stub_ret.extend(parse_params(f, sig.parameters))
-    stub_ret.append(ret_val_init(sig.return_annotation))
+    ret_init = ret_val_init(sig.return_annotation)
+    if ret_init:
+        stub_ret.append(ret_init)
     stub_ret.append("")
-    stub_ret.append(code())
+    stub_ret.append(code(f))
     stub_ret.append("")
     stub_ret.append(ret_val_return(sig.return_annotation))
     stub_ret.append("}")
@@ -66,7 +70,7 @@ def stub_module(mod):
     stub_ret.append("")
     stub_ret.append(f"STATIC MP_DEFINE_CONST_DICT({mod.__name__}_module_globals, {mod.__name__}_module_globals_table);")
     # Define the module object
-    stub_ret.append(f"const mp_obj_module_t {mod.__name__}user_cmodule = {{")
+    stub_ret.append(f"const mp_obj_module_t {mod.__name__}_user_cmodule = {{")
     stub_ret.append(f"\t.base = {{&mp_type_module}},")
     stub_ret.append(f"\t.globals = (mp_obj_dict_t*)&{mod.__name__}_module_globals,")
     stub_ret.append("};")
@@ -202,8 +206,11 @@ def function_comments(f):
         return "// No Comment"
 
 
-def code():
-    return "\t//Your code here"
+def code(f):
+    try:
+        return f.code
+    except AttributeError:
+        return "\t//Your code here"
 
 
 def function_reference(f, name, params):
@@ -214,6 +221,56 @@ def function_reference(f, name, params):
         return f"MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN({name}_obj, {len(params)}, {len(params)}, {name});"
     else:
         return f"MP_DEFINE_CONST_FUN_OBJ_KW({f.__module__}_{f.__name__}_obj, 1, {f.__module__}_{f.__name__});"
+
+
+def filter_comments(csvfile):
+    for row in csvfile:
+        if row.startswith('#'):
+            continue
+        yield row
+
+
+def register_func(func_name, address, length, access_control, mod="csr"):
+    def write_func(value: int) -> None:
+        pass
+
+    def read_func() -> int:
+        pass
+
+    write_func.__name__ = f"{func_name}_write"
+    write_func.__qualname__ = f"{func_name}_write"
+    write_func.__module__ = mod
+    write_func.__doc__ = f"""writes a value to {func_name} @ register {address}"""
+    write_func.code = f"\tret_val = {func_name}_read();"
+
+    read_func.__name__ = f"{func_name}_read"
+    read_func.__qualname__ = f"{func_name}_read"
+    read_func.__doc__ = f""":return: value from {func_name} @ register {address}"""
+    read_func.__module__ = mod
+    read_func.code = f"\t{func_name}_write(value);"
+
+    if access_control == "ro":
+        return [read_func]
+    elif access_control == "rw":
+        return [read_func, write_func]
+
+
+csr_types = {
+    "csr_register": register_func
+}
+
+
+def parse_csv(path):
+    mod = types.ModuleType("csr")
+    with open(path) as f:
+        reader = csv.reader(filter_comments(f))
+        for csr_type, func_name, address, length, access_control in reader:
+            if csr_type in csr_types:
+                funcs = csr_types[csr_type](func_name, address, length, access_control, mod)
+                for func in funcs:
+                    setattr(mod, func.__name__, func)
+                    # print(func)
+    return mod
 
 
 if __name__ == "__main__":
@@ -228,4 +285,7 @@ if __name__ == "__main__":
     #     """
 
     # print("\n".join(stub_function(example.add_ints)))
-    print(stub_module(example))
+    # print(stub_module(example))
+    mod = parse_csv("C:\\dev\\Github\\micropython-ustubby\\test\\test_data\\csr.csv")
+    print(mod.__dict__)
+    print(stub_module(mod))
