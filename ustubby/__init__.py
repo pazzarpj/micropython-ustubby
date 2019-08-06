@@ -271,21 +271,3 @@ def parse_csv(path):
                     setattr(mod, func.__name__, func)
                     # print(func)
     return mod
-
-
-if __name__ == "__main__":
-    import example
-
-    # def add_ints(a: int, b: str, c: float, d: tuple) -> int:
-    #     """
-    #     Adds two integers
-    #     :param a:
-    #     :param b:
-    #     :return:
-    #     """
-
-    # print("\n".join(stub_function(example.add_ints)))
-    # print(stub_module(example))
-    mod = parse_csv("C:\\dev\\Github\\micropython-ustubby\\test\\test_data\\csr.csv")
-    print(mod.__dict__)
-    print(stub_module(mod))
