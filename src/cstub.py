@@ -8,6 +8,13 @@ def string_template(base_str):
     return string_handle
 
 
+def expand_newlines(lst_in):
+    new_list = []
+    for line in lst_in:
+        new_list.extend(line.replace('\t', '    ').split('\n'))
+    return new_list
+
+
 type_handler = {
     int: string_template("\tmp_int_t {0} = mp_obj_get_int({0}_obj);"),
     float: string_template("\tmp_float_t {0} = mp_obj_get_float({0}_obj);"),
@@ -31,12 +38,12 @@ def stub_function(f):
     stub_ret.extend(parse_params(f, sig.parameters))
     stub_ret.append(ret_val_init(sig.return_annotation))
     stub_ret.append(code())
+    stub_ret.append("")
     stub_ret.append(ret_val_return(sig.return_annotation))
     stub_ret.append("}")
     # C Function Definition
-    stub_ret.append("")
     stub_ret.append(function_reference(f, f"{f.__module__}_{f.__name__}", sig.parameters))
-    return stub_ret
+    return expand_newlines(stub_ret)
 
 
 def stub_module(mod):
@@ -89,7 +96,7 @@ return_handler = {
     int: "\treturn mp_obj_new_int(ret_val);",
     float: "\treturn mp_obj_new_float(ret_val);",
     bool: "\treturn mp_obj_new_bool(ret_val);",
-    str: "\treturn mp_obj_new_str({ret_val_ptr}, {ret_val_len})",
+    str: "\treturn mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
     None: "\treturn mp_const_none;"
 }
 
@@ -118,23 +125,14 @@ def function_params(params):
 
 
 def kw_enum(params):
-    return f"\tenum {{ {', '.join(['ARG_' + k for k in params])} }}"
+    return f"\tenum {{ {', '.join(['ARG_' + k for k in params])} }};"
 
 
 shortened_types = {
     int: "int",
     object: "obj",
-    None: "NULL",
-    bool: "false"
-
-}
-
-defaults = {
-    int: "0",
-    float: "0",
-    None: "MP_OBJ_NULL",
-    object: "MP_OBJ_NULL",
-
+    None: "null",
+    bool: "bool",
 }
 
 
@@ -147,18 +145,27 @@ def kw_allowed_args(f, params):
             arg_type = "MP_ARG_KW_ONLY"
         type_txt = shortened_types[param.annotation]
         if param.default is inspect._empty:
-            default = defaults[param.annotation]
+            default = ""
+        elif param.default is None:
+            default = f"{{ .u_{type_txt} = MP_OBJ_NULL }}"
         else:
-            default = param.default
-        args.append(f"{{ MP_QSTR_{name}, {arg_type} | MP_ARG_{type_txt.upper()}, {{ .u_{type_txt} = {default} }} }},")
+            default = f"{{ .u_{type_txt} = {param.default} }}"
+        args.append(f"{{ MP_QSTR_{name}, {arg_type} | MP_ARG_{type_txt.upper()}, {default} }},")
     args = "\n\t\t".join(args)
-    return f"\tSTATIC const mp_arg_t {f.__module__}_{f.__name__}_allowed_args[] = {{\n\t\t{args} \n\t}};"
+    return f"\tSTATIC const mp_arg_t {f.__module__}_{f.__name__}_allowed_args[] = {{\n\t\t{args}\n\t}};"
 
 
 def arg_array(f):
-    return f"\tmp_arg_val_t args[MP_ARRAY_SIZE({f.__module__}_{f.__name__}_allowed_args)];\n" \
+    args = f"{f.__module__}_{f.__name__}_allowed_args"
+    return f"\tmp_arg_val_t args[MP_ARRAY_SIZE({args})];\n" \
         f"\tmp_arg_parse_all(n_args - 1, pos_args + 1, kw_args,\n" \
-        f"\t\tMP_ARRAY_SIZE({f.__module__}_{f.__name__}_allowed_args), machine_i2c_mem_allowed_args, args);"
+        f"\t\tMP_ARRAY_SIZE({args}), {args}, args);"
+
+
+def arg_unpack(params):
+    return "\n".join(
+        f"\tmp_{shortened_types[param.annotation]}_t {name} = args[ARG_{name}].u_{shortened_types[param.annotation]};"
+        for name, param in params.items())
 
 
 def parse_params(f, params):
@@ -170,7 +177,7 @@ def parse_params(f, params):
     if simple:
         return [type_handler[value.annotation](param) for param, value in params.items()]
     else:
-        return [kw_enum(params), kw_allowed_args(f, params), arg_array(f)]
+        return [kw_enum(params), kw_allowed_args(f, params), "", arg_array(f), "", arg_unpack(params)]
 
 
 def headers():
@@ -194,7 +201,7 @@ def function_comments(f):
 
 
 def code():
-    return "\n\t// your code here\n"
+    return "\t//Your code here"
 
 
 def function_reference(f, name, params):
@@ -204,7 +211,7 @@ def function_reference(f, name, params):
     elif simple:
         return f"MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN({name}_obj, {len(params)}, {len(params)}, {name});"
     else:
-        return f"MP_DEFINE_CONST_FUN_OBJ_KW({f.__module__}_{f.__name__}_obj, 1, {f.__module__}_{f.__name__}_readfrom_mem);"
+        return f"MP_DEFINE_CONST_FUN_OBJ_KW({f.__module__}_{f.__name__}_obj, 1, {f.__module__}_{f.__name__});"
 
 
 if __name__ == "__main__":
