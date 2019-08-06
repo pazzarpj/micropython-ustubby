@@ -353,6 +353,14 @@ Install the test requirements with
 ```bash
 pip install -r requirements-test.txt
 ```
+Install the package in editable mode
+```bash
+pip install -e .
+```
+Run the tests
+```bash
+pytest
+```
 
 ## Check out the docs
 
