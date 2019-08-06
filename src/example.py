@@ -28,6 +28,16 @@ def add_ints(a: int, b: int) -> int:
 #
 # def foo(a, b, c, d=None, **kwargs):
 #     pass
+# class testclass:
+#     def readfrom_mem_class(self, addr: int = 0, memaddr: int = 0, arg: object = None, *, addrsize: int = 8) -> str:
+#         """
+#         :param addr:
+#         :param memaddr:
+#         :param arg:
+#         :param addrsize:
+#         :return:
+#         """
+
 
 def readfrom_mem(addr: int = 0, memaddr: int = 0, arg: object = None, *, addrsize: int = 8) -> str:
     """

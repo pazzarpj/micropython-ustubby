@@ -1,41 +1,45 @@
-import cstub
+import ustubby
 
 
-# def test_basic_example():
-#     def add_ints(a: int, b: int) -> int:
-#         pass
-#
-#     assert cstub.stub_function(add_ints) == """// Include required definitions first.
-# #include "py/obj.h"
-# #include "py/runtime.h"
-# #include "py/builtin.h"
-#
-# // This is the function which will be called from Python as example.add_ints(a, b).
-# STATIC mp_obj_t example_add_ints(mp_obj_t a_obj, mp_obj_t b_obj) {
-#     // Extract the ints from the micropython input objects
-#     int a = mp_obj_get_int(a_obj);
-#     int b = mp_obj_get_int(b_obj);
-#
-#     // Calculate the addition and convert to MicroPython object.
-#     return mp_obj_new_int(a + b);
-# }
-# // Define a Python reference to the function above
-# STATIC MP_DEFINE_CONST_FUN_OBJ_2(example_add_ints_obj, example_add_ints);
-#
-# // Define all properties of the example module.
-# // Table entries are key/value pairs of the attribute name (a string)
-# // and the MicroPython object reference.
-# // All identifiers and strings are written as MP_QSTR_xxx and will be
-# // optimized to word-sized integers by the build system (interned strings).
-# STATIC const mp_rom_map_elem_t example_module_globals_table[] = {
-#     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_example) },
-#     { MP_ROM_QSTR(MP_QSTR_add_ints), MP_ROM_PTR(&example_add_ints_obj) },
-# };
-# """
+def test_basic_example():
+    def add_ints(a: int, b: int) -> int:
+        """Adds two integers
+        :param a:
+        :param b:
+        :return:a + b"""
+
+    add_ints.__module__ = "example"
+    lines = """//Adds two integers
+//:param a:
+//:param b:
+//:return:a + b
+STATIC mp_obj_t example_add_ints(mp_obj_t a_obj, mp_obj_t b_obj) {
+    mp_int_t a = mp_obj_get_int(a_obj);
+    mp_int_t b = mp_obj_get_int(b_obj);
+    mp_int_t ret_val;
+
+    //Your code here
+
+    return mp_obj_new_int(ret_val);
+}
+MP_DEFINE_CONST_FUN_OBJ_2(example_add_ints_obj, example_add_ints);""".splitlines()
+
+    call_lines = ustubby.stub_function(add_ints)
+    for index, line in enumerate(call_lines):
+        assert line == lines[index]
 
 
 def test_readfrom_mem():
-    import example
+    def readfrom_mem(addr: int = 0, memaddr: int = 0, arg: object = None, *, addrsize: int = 8) -> str:
+        """
+        :param addr:
+        :param memaddr:
+        :param arg:
+        :param addrsize:
+        :return:
+        """
+
+    readfrom_mem.__module__ = "example"
     lines = """//
 //:param addr:
 //:param memaddr:
@@ -61,11 +65,12 @@ STATIC mp_obj_t example_readfrom_mem(size_t n_args, const mp_obj_t *pos_args, mp
     mp_obj_t arg = args[ARG_arg].u_obj;
     mp_int_t addrsize = args[ARG_addrsize].u_int;
 
+
     //Your code here
 
     return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(example_readfrom_mem_obj, 1, example_readfrom_mem);""".splitlines()
-    call_lines = cstub.stub_function(example.readfrom_mem)
+    call_lines = ustubby.stub_function(readfrom_mem)
     for index, line in enumerate(call_lines):
         assert line == lines[index]

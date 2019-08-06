@@ -37,6 +37,7 @@ def stub_function(f):
     stub_ret[-1] += function_params(sig.parameters)
     stub_ret.extend(parse_params(f, sig.parameters))
     stub_ret.append(ret_val_init(sig.return_annotation))
+    stub_ret.append("")
     stub_ret.append(code())
     stub_ret.append("")
     stub_ret.append(ret_val_return(sig.return_annotation))
@@ -48,7 +49,9 @@ def stub_function(f):
 
 def stub_module(mod):
     stub_ret = [headers()]
-    functions = [o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])]
+    classes = [o[1] for o in inspect.getmembers(mod) if inspect.isclass(o[1])]
+    functions = [o[1] for cls in classes for o in inspect.getmembers(cls) if inspect.isfunction(o[1])]
+    functions.extend([o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])])
     # Define the functions
     for func in functions:
         stub_ret.extend(stub_function(func))
@@ -110,12 +113,11 @@ def ret_val_return(ret_type):
 
 
 def function_params(params):
-    pass
     if len(params) == 0:
         return "() {"
     simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
     if simple and len(params) < 4:
-        params = ", ".join([f"mp_object {x}_obj" for x in params])
+        params = ", ".join([f"mp_obj_t {x}_obj" for x in params])
         return params + ") {"
     elif simple:
         return "size_t n_args, const mp_obj_t *args) {"
