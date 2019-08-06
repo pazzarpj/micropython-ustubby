@@ -7,7 +7,7 @@ import os
 
 BASE_LOCATION = os.path.abspath(os.path.dirname(__file__))
 
-VERSION_FILE = os.path.join(BASE_LOCATION, "ustubby", "__init__.py")
+VERSION_FILE = os.path.join(BASE_LOCATION, "src", "ustubby", "__init__.py")
 REQUIRES_FILE = 'requirements.txt'
 DEPENDENCIES_FILE = None
 
@@ -54,12 +54,11 @@ setup(
     author="Ryan Parry-Jones",
     author_email="ryanspj+github@gmail.com",
     description="Micropython c stub generator",
-    package_dir={'': ''},
-    packages=find_packages(''),
-    scripts=[],
+    package_dir={'': 'src'},
+    packages=find_packages('src'),
     url="https://github.com/pazzarpj/ustubby",
     version=get_version(),
-    python_requires='~=3.6',
+    python_requires='>=3.6',
     dependency_links=[],
     include_package_data=True,
     zip_safe=False,
@@ -67,6 +66,9 @@ setup(
         "Development Status :: 4 - Beta",
         "Intended Audience :: Manufacturing",
         "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3 :: Only"
+        "Programming Language :: Python :: 3 :: Only",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
     ],
 )
