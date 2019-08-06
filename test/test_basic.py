@@ -24,7 +24,7 @@ STATIC mp_obj_t example_add_ints(mp_obj_t a_obj, mp_obj_t b_obj) {
 }
 MP_DEFINE_CONST_FUN_OBJ_2(example_add_ints_obj, example_add_ints);""".splitlines()
 
-    call_lines = ustubby.stub_function(add_ints)
+    call_lines = ustubby.stub_function(add_ints).splitlines()
     for index, line in enumerate(call_lines):
         assert line == lines[index]
 
@@ -70,6 +70,6 @@ STATIC mp_obj_t example_readfrom_mem(size_t n_args, const mp_obj_t *pos_args, mp
     return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(example_readfrom_mem_obj, 1, example_readfrom_mem);""".splitlines()
-    call_lines = ustubby.stub_function(readfrom_mem)
+    call_lines = ustubby.stub_function(readfrom_mem).splitlines()
     for index, line in enumerate(call_lines):
         assert line == lines[index]
