@@ -2,6 +2,8 @@ import inspect
 import types
 import csv
 
+__version__ = "0.1.0"
+
 
 def string_template(base_str):
     def string_handle(*args, **kwargs):
