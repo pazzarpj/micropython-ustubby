@@ -65,7 +65,6 @@ STATIC mp_obj_t example_readfrom_mem(size_t n_args, const mp_obj_t *pos_args, mp
     mp_obj_t arg = args[ARG_arg].u_obj;
     mp_int_t addrsize = args[ARG_addrsize].u_int;
 
-
     //Your code here
 
     return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);
