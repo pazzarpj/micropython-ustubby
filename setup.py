@@ -38,7 +38,7 @@ def get_version():
         ret = re.search(r"(?<=\")[\d\.]+", res).group(0)
         if ret:
             return ret
-    raise ValueError("No version for fixate found")
+    raise ValueError("No version for ustubby found")
 
 
 def get_requires():
@@ -50,10 +50,10 @@ def get_dependencies():
 
 
 setup(
-    name="fixate",
+    name="ustubby",
     author="Ryan Parry-Jones",
     author_email="ryanspj+github@gmail.com",
-    description="Framework for hardware test fixtures and automated test environments",
+    description="Micropython c stub generator",
     package_dir={'': ''},
     packages=find_packages(''),
     scripts=[],
