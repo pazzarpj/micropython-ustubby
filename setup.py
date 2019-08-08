@@ -55,6 +55,7 @@ setup(
     author_email="ryanspj+github@gmail.com",
     description="Micropython c stub generator",
     long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
     package_dir={'': 'src'},
     packages=find_packages('src'),
     url="https://github.com/pazzarpj/micropython-ustubby",
