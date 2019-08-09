@@ -1,3 +1,4 @@
+from __future__ import annotations
 import inspect
 import types
 import csv
@@ -10,13 +11,6 @@ def string_template(base_str):
         return base_str.format(*args, **kwargs)
 
     return string_handle
-
-
-def expand_newlines(lst_in):
-    new_list = []
-    for line in lst_in:
-        new_list.extend(line.replace('\t', '    ').split('\n'))
-    return new_list
 
 
 type_handler = {
@@ -32,6 +26,147 @@ type_handler = {
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
 }
+
+return_type_handler = {
+    int: "\tmp_int_t ret_val;",
+    float: "\tmp_float_t ret_val;",
+    bool: "\tbool ret_val;",
+    str: "",
+    # tuple: string_template(
+    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+    # list: string_template(
+    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+    # set: string_template(
+    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+    None: ""
+}
+
+return_handler = {
+    int: "\treturn mp_obj_new_int(ret_val);",
+    float: "\treturn mp_obj_new_float(ret_val);",
+    bool: "\treturn mp_obj_new_bool(ret_val);",
+    str: "\treturn mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
+    None: "\treturn mp_const_none;"
+}
+
+shortened_types = {
+    int: "int",
+    object: "obj",
+    None: "null",
+    bool: "bool",
+}
+
+
+def expand_newlines(lst_in):
+    new_list = []
+    for line in lst_in:
+        new_list.extend(line.replace('\t', '    ').split('\n'))
+    return new_list
+
+
+class BaseContainer:
+    def load_c(self, input: str):
+        """
+        :param input: String of c source
+        :return: self
+        """
+        return self
+
+    def load_python(self, input):
+        """
+        :param input: Python Object
+        :return: self
+        """
+        return self
+
+    def to_c(self):
+        """
+        Parse the container into c source code
+        :return:
+        """
+
+    def to_python(self):
+        """
+        Parse the container into python objects
+        :return:
+        """
+
+
+class ModuleContainer:
+    def __init__(self):
+        self.headers = ['#include "py/obj.h"', '#include "py/runtime.h"', '#include "py/builtin.h"']
+        self.functions = []
+
+
+class FunctionContainer(BaseContainer):
+    def __init__(self):
+        self.comments = None
+        self.name = None
+        self.module = None
+        self.parameters = None
+        self.code = None
+        self.return_type = None
+        self.return_value = None
+
+    def load_python(self, input):
+        """
+        :param input: Function to parse
+        :return:
+        """
+        self.comments = input.__doc__
+        self.name = input.__name__
+        self.module = input.__module__
+        self.parameters = ParametersContainer().load_python(inspect.signature(input))
+        self.return_type = inspect.signature(input).return_annotation
+        return self
+
+    def to_c_comments(self):
+        """
+        Uses single line comments as we can't know if there are string escapes such as /* in the code
+        :param f:
+        :return:
+        """
+        if self.comments:
+            return '\n'.join(["//" + line.strip() for line in self.comments.splitlines()])
+
+    def to_c_func_def(self):
+        return f"STATIC mp_obj_t {self.module}_{self.name}("
+
+    def to_c_return_val_init(self):
+        return return_type_handler[self.return_type]
+
+    def to_c_code_body(self):
+        if self.code:
+            return self.code
+        else:
+            return "\\Your Code Here"
+
+    def to_c_return_value(self):
+        if self.return_value is not None:
+            return self.return_value
+        else:
+            return return_handler.get(self.return_type)
+
+    def to_c_define(self):
+        if self.parameters.type == "positional":
+            return f"MP_DEFINE_CONST_FUN_OBJ_{self.parameters.count}(" \
+                f"{self.module}_{self.name}_obj, {self.module}_{self.name});"
+        elif self.parameters.type == "between":
+            return f"MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(" \
+                f"{self.module}_{self.name}_obj, " \
+                f"{self.parameters.count}, {self.parameters.count}, {self.module}_{self.name});"
+        elif self.parameters.type == "keyword":
+            return f"MP_DEFINE_CONST_FUN_OBJ_KW({self.module}_{self.name}_obj, 1, {self.module}_{self.name});"
+
+
+class ParametersContainer(BaseContainer):
+    def __init__(self):
+        self.type = ""
+        self.count = 0
+
+
+class ReturnContainer(BaseContainer):
+    pass
 
 
 def stub_function(f):
@@ -87,29 +222,6 @@ def function_init(func_name):
     return f"STATIC mp_obj_t {func_name}("
 
 
-return_type_handler = {
-    int: "\tmp_int_t ret_val;",
-    float: "\tmp_float_t ret_val;",
-    bool: "\tbool ret_val;",
-    str: "",
-    # tuple: string_template(
-    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
-    # list: string_template(
-    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
-    # set: string_template(
-    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
-    None: ""
-}
-
-return_handler = {
-    int: "\treturn mp_obj_new_int(ret_val);",
-    float: "\treturn mp_obj_new_float(ret_val);",
-    bool: "\treturn mp_obj_new_bool(ret_val);",
-    str: "\treturn mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
-    None: "\treturn mp_const_none;"
-}
-
-
 def ret_val_init(ret_type):
     return return_type_handler[ret_type]
 
@@ -134,14 +246,6 @@ def function_params(params):
 
 def kw_enum(params):
     return f"\tenum {{ {', '.join(['ARG_' + k for k in params])} }};"
-
-
-shortened_types = {
-    int: "int",
-    object: "obj",
-    None: "null",
-    bool: "bool",
-}
 
 
 def kw_allowed_args(f, params):
