@@ -29,6 +29,23 @@ MP_DEFINE_CONST_FUN_OBJ_2(example_add_ints_obj, example_add_ints);""".splitlines
         assert line == lines[index]
 
 
+def test_basic_example_load_function():
+    def add_ints(a: int, b: int) -> int:
+        """Adds two integers
+        :param a:
+        :param b:
+        :return:a + b"""
+
+    add_ints.__module__ = "example"
+    func = ustubby.FunctionContainer().load_python(add_ints)
+    assert func.to_c_comments() == """//Adds two integers\n//:param a:\n//:param b:\n//:return:a + b"""
+    assert func.to_c_func_def() == "STATIC mp_obj_t example_add_ints"
+    assert func.to_c_return_val_init() == "mp_int_t ret_val;"
+    assert func.to_c_code_body() == "\\Your code here"
+    assert func.to_c_return_value() == "return mp_obj_new_int(ret_val);"
+    assert func.to_c_define() == "MP_DEFINE_CONST_FUN_OBJ_2(example_add_ints_obj, example_add_ints);"
+
+
 def test_readfrom_mem():
     def readfrom_mem(addr: int = 0, memaddr: int = 0, arg: object = None, *, addrsize: int = 8) -> str:
         """
@@ -73,3 +90,23 @@ MP_DEFINE_CONST_FUN_OBJ_KW(example_readfrom_mem_obj, 1, example_readfrom_mem);""
     call_lines = ustubby.stub_function(readfrom_mem).splitlines()
     for index, line in enumerate(call_lines):
         assert line == lines[index]
+
+
+def test_readfrom_mem_load_function():
+    def readfrom_mem(addr: int = 0, memaddr: int = 0, arg: object = None, *, addrsize: int = 8) -> str:
+        """
+        :param addr:
+        :param memaddr:
+        :param arg:
+        :param addrsize:
+        :return:
+        """
+
+    readfrom_mem.__module__ = "example"
+    func = ustubby.FunctionContainer().load_python(readfrom_mem)
+    assert func.to_c_comments() == """//:param addr:\n//:param memaddr:\n//:param arg:\n//:param addrsize:\n//:return:"""
+    assert func.to_c_func_def() == "STATIC mp_obj_t example_readfrom_mem"
+    assert func.to_c_return_val_init() is None
+    assert func.to_c_code_body() == "\\Your code here"
+    assert func.to_c_return_value() == "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);"
+    assert func.to_c_define() == "MP_DEFINE_CONST_FUN_OBJ_KW(example_readfrom_mem_obj, 1, example_readfrom_mem);"
