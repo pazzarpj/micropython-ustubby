@@ -2,6 +2,7 @@ from __future__ import annotations
 import inspect
 import types
 import csv
+from typing import Dict
 
 __version__ = "0.1.1"
 
@@ -72,7 +73,7 @@ class BaseContainer:
         """
         return self
 
-    def load_python(self, input):
+    def load_python(self, input) -> BaseContainer:
         """
         :param input: Python Object
         :return: self
@@ -99,6 +100,27 @@ class ModuleContainer:
 
 
 class FunctionContainer(BaseContainer):
+    return_type_handler = {
+        int: "mp_int_t ret_val;",
+        float: "mp_float_t ret_val;",
+        bool: "bool ret_val;",
+        str: None,
+        # tuple: string_template(
+        #     "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        # list: string_template(
+        #     "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        # set: string_template(
+        #     "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        None: None
+    }
+    return_handler = {
+        int: "return mp_obj_new_int(ret_val);",
+        float: "return mp_obj_new_float(ret_val);",
+        bool: "return mp_obj_new_bool(ret_val);",
+        str: "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
+        None: "return mp_const_none;"
+    }
+
     def __init__(self):
         self.comments = None
         self.name = None
@@ -107,8 +129,9 @@ class FunctionContainer(BaseContainer):
         self.code = None
         self.return_type = None
         self.return_value = None
+        self.signature = None
 
-    def load_python(self, input):
+    def load_python(self, input) -> FunctionContainer:
         """
         :param input: Function to parse
         :return:
@@ -116,7 +139,8 @@ class FunctionContainer(BaseContainer):
         self.comments = input.__doc__
         self.name = input.__name__
         self.module = input.__module__
-        self.parameters = ParametersContainer().load_python(inspect.signature(input))
+        self.signature = inspect.signature(input)
+        self.parameters = ParametersContainer().load_python(self.signature.parameters)
         self.return_type = inspect.signature(input).return_annotation
         return self
 
@@ -127,25 +151,25 @@ class FunctionContainer(BaseContainer):
         :return:
         """
         if self.comments:
-            return '\n'.join(["//" + line.strip() for line in self.comments.splitlines()])
+            return '\n'.join(["//" + line.strip() for line in self.comments.splitlines() if line.strip()])
 
     def to_c_func_def(self):
-        return f"STATIC mp_obj_t {self.module}_{self.name}("
+        return f"STATIC mp_obj_t {self.module}_{self.name}"
 
     def to_c_return_val_init(self):
-        return return_type_handler[self.return_type]
+        return self.return_type_handler[self.return_type]
 
     def to_c_code_body(self):
         if self.code:
             return self.code
         else:
-            return "\\Your Code Here"
+            return "\\Your code here"
 
     def to_c_return_value(self):
         if self.return_value is not None:
             return self.return_value
         else:
-            return return_handler.get(self.return_type)
+            return self.return_handler.get(self.return_type)
 
     def to_c_define(self):
         if self.parameters.type == "positional":
@@ -163,6 +187,19 @@ class ParametersContainer(BaseContainer):
     def __init__(self):
         self.type = ""
         self.count = 0
+        self.parameters = None
+
+    def load_python(self, input: Dict[str, inspect.Parameter]) -> ParametersContainer:
+        self.parameters = input
+        self.count = len(self.parameters)
+        simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in self.parameters.values()])
+        if simple and self.count < 4:
+            self.type = "positional"
+        elif simple:
+            self.type = "between"
+        else:
+            self.type = "keyword"
+        return self
 
 
 class ReturnContainer(BaseContainer):
