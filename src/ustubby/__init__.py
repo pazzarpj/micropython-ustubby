@@ -182,8 +182,26 @@ class FunctionContainer(BaseContainer):
         elif self.parameters.type == "keyword":
             return f"MP_DEFINE_CONST_FUN_OBJ_KW({self.module}_{self.name}_obj, 1, {self.module}_{self.name});"
 
+    def to_c_arg_array_def(self):
+        if self.parameters.type == "keyword":
+            return f"STATIC const mp_arg_t {self.module}_{self.name}_allowed_args[]"
+
 
 class ParametersContainer(BaseContainer):
+    type_handler = {
+        int: string_template("\tmp_int_t {0} = mp_obj_get_int({0}_obj);"),
+        float: string_template("\tmp_float_t {0} = mp_obj_get_float({0}_obj);"),
+        bool: string_template("\tbool {0} = mp_obj_is_true({0}_obj);"),
+        str: string_template("\tconst char* {0} = mp_obj_str_get_str({0}_obj);"),
+        tuple: string_template(
+            "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        list: string_template(
+            "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        set: string_template(
+            "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
+    }
+
     def __init__(self):
         self.type = ""
         self.count = 0
@@ -200,6 +218,49 @@ class ParametersContainer(BaseContainer):
         else:
             self.type = "keyword"
         return self
+
+    def to_c_enums(self):
+        if self.type != "keyword":
+            return None
+        return f"enum {{ {', '.join(['ARG_' + k for k in self.parameters])} }};"
+
+    def to_c_kw_allowed_args(self):
+        if self.type == "keyword":
+            args = []
+            for name, param in self.parameters.items():
+                if param.kind in [param.POSITIONAL_OR_KEYWORD, param.POSITIONAL_ONLY]:
+                    arg_type = "MP_ARG_REQUIRED"
+                else:
+                    arg_type = "MP_ARG_KW_ONLY"
+                type_txt = shortened_types[param.annotation]
+                if param.default is inspect._empty:
+                    default = ""
+                elif param.default is None:
+                    default = f"{{ .u_{type_txt} = MP_OBJ_NULL }}"
+                else:
+                    default = f"{{ .u_{type_txt} = {param.default} }}"
+                args.append(f"{{ MP_QSTR_{name}, {arg_type} | MP_ARG_{type_txt.upper()}, {default} }},")
+            args = "\n\t\t".join(args)
+            # return f"\tSTATIC const mp_arg_t {f.__module__}_{f.__name__}_allowed_args[] = {{\n\t\t{args}\n\t}};"
+
+    def to_c_arg_array(self):
+        if self.type != "keyword":
+            return None
+
+    def to_c_kw_arg_unpack(self):
+        if self.type != "keyword":
+            return None
+
+    def parse_params(self, f, params):
+        """
+        :param params: Parameter signature from inspect.signature
+        :return: list of strings defining the parsed parameters in c
+        """
+        simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
+        if simple:
+            return [type_handler[value.annotation](param) for param, value in params.items()]
+        else:
+            return [kw_enum(params), kw_allowed_args(f, params), "", arg_array(f), "", arg_unpack(params)]
 
 
 class ReturnContainer(BaseContainer):

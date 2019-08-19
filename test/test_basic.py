@@ -44,6 +44,7 @@ def test_basic_example_load_function():
     assert func.to_c_code_body() == "\\Your code here"
     assert func.to_c_return_value() == "return mp_obj_new_int(ret_val);"
     assert func.to_c_define() == "MP_DEFINE_CONST_FUN_OBJ_2(example_add_ints_obj, example_add_ints);"
+    assert func.to_c_arg_array_def() is None
 
 
 def test_readfrom_mem():
@@ -110,3 +111,4 @@ def test_readfrom_mem_load_function():
     assert func.to_c_code_body() == "\\Your code here"
     assert func.to_c_return_value() == "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);"
     assert func.to_c_define() == "MP_DEFINE_CONST_FUN_OBJ_KW(example_readfrom_mem_obj, 1, example_readfrom_mem);"
+    assert func.to_c_arg_array_def() == "STATIC const mp_arg_t example_readfrom_mem_allowed_args[]"
