@@ -125,7 +125,7 @@ class FunctionContainer(BaseContainer):
         self.comments = None
         self.name = None
         self.module = None
-        self.parameters = None
+        self.parameters: ParametersContainer = ParametersContainer()
         self.code = None
         self.return_type = None
         self.return_value = None
@@ -140,7 +140,7 @@ class FunctionContainer(BaseContainer):
         self.name = input.__name__
         self.module = input.__module__
         self.signature = inspect.signature(input)
-        self.parameters = ParametersContainer().load_python(self.signature.parameters)
+        self.parameters.load_python(self.signature.parameters)
         self.return_type = inspect.signature(input).return_annotation
         return self
 
@@ -163,7 +163,7 @@ class FunctionContainer(BaseContainer):
         if self.code:
             return self.code
         else:
-            return "\\Your code here"
+            return "//Your code here"
 
     def to_c_return_value(self):
         if self.return_value is not None:
@@ -186,19 +186,33 @@ class FunctionContainer(BaseContainer):
         if self.parameters.type == "keyword":
             return f"STATIC const mp_arg_t {self.module}_{self.name}_allowed_args[]"
 
+    def to_c(self):
+        # TODO work on formatter
+        resp = self.to_c_comments()
+        resp += "\n"
+        resp += f"{self.to_c_func_def()}({self.parameters.to_c_input()}) {{\n"
+        resp += "    " + "\n    ".join(self.parameters.to_c_init().splitlines()) + "\n"
+        if self.to_c_return_val_init():
+            resp += "    " + self.to_c_return_val_init()
+        resp += f"\n\n    {self.to_c_code_body()}\n\n"
+        resp += f"    {self.to_c_return_value()}\n"
+        resp += "}\n"
+        resp += self.to_c_define()
+        return resp
+
 
 class ParametersContainer(BaseContainer):
     type_handler = {
-        int: string_template("\tmp_int_t {0} = mp_obj_get_int({0}_obj);"),
-        float: string_template("\tmp_float_t {0} = mp_obj_get_float({0}_obj);"),
-        bool: string_template("\tbool {0} = mp_obj_is_true({0}_obj);"),
-        str: string_template("\tconst char* {0} = mp_obj_str_get_str({0}_obj);"),
+        int: string_template("mp_int_t {0} = mp_obj_get_int({0}_obj);"),
+        float: string_template("mp_float_t {0} = mp_obj_get_float({0}_obj);"),
+        bool: string_template("bool {0} = mp_obj_is_true({0}_obj);"),
+        str: string_template("const char* {0} = mp_obj_str_get_str({0}_obj);"),
         tuple: string_template(
-            "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+            "mp_obj_t *{0} = NULL;\nsize_t {0}_len = 0;\nmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
         list: string_template(
-            "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+            "mp_obj_t *{0} = NULL;\nsize_t {0}_len = 0;\nmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
         set: string_template(
-            "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+            "mp_obj_t *{0} = NULL;\nsize_t {0}_len = 0;\nmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
         object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
     }
 
@@ -240,7 +254,7 @@ class ParametersContainer(BaseContainer):
                 else:
                     default = f"{{ .u_{type_txt} = {param.default} }}"
                 args.append(f"{{ MP_QSTR_{name}, {arg_type} | MP_ARG_{type_txt.upper()}, {default} }},")
-            args = "\n\t\t".join(args)
+            return args
             # return f"\tSTATIC const mp_arg_t {f.__module__}_{f.__name__}_allowed_args[] = {{\n\t\t{args}\n\t}};"
 
     def to_c_arg_array(self):
@@ -251,16 +265,25 @@ class ParametersContainer(BaseContainer):
         if self.type != "keyword":
             return None
 
-    def parse_params(self, f, params):
-        """
-        :param params: Parameter signature from inspect.signature
-        :return: list of strings defining the parsed parameters in c
-        """
-        simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
-        if simple:
-            return [type_handler[value.annotation](param) for param, value in params.items()]
+    def to_c_input(self):
+        if self.type == "positional":
+            return ", ".join([f"mp_obj_t {x}_obj" for x in self.parameters])
+        elif self.type == "between":
+            return "size_t n_args, const mp_obj_t *args"
+        elif self.type == "keyword":
+            # Complex case
+            return "size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {"
+
+    def to_c_init(self):
+        if self.type == "keyword":
+            return "\n".join([self.to_c_enums(),
+                              self.to_c_kw_allowed_args(),
+                              "",
+                              self.to_c_arg_array(),
+                              "",
+                              self.to_c_kw_arg_unpack()])
         else:
-            return [kw_enum(params), kw_allowed_args(f, params), "", arg_array(f), "", arg_unpack(params)]
+            return "\n".join([self.type_handler[value.annotation](param) for param, value in self.parameters.items()])
 
 
 class ReturnContainer(BaseContainer):
