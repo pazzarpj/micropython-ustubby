@@ -1,6 +1,8 @@
+from __future__ import annotations
 import inspect
 import types
 import csv
+from typing import Dict
 
 __version__ = "0.1.1"
 
@@ -10,13 +12,6 @@ def string_template(base_str):
         return base_str.format(*args, **kwargs)
 
     return string_handle
-
-
-def expand_newlines(lst_in):
-    new_list = []
-    for line in lst_in:
-        new_list.extend(line.replace('\t', '    ').split('\n'))
-    return new_list
 
 
 type_handler = {
@@ -32,6 +27,267 @@ type_handler = {
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
 }
+
+return_type_handler = {
+    int: "\tmp_int_t ret_val;",
+    float: "\tmp_float_t ret_val;",
+    bool: "\tbool ret_val;",
+    str: "",
+    # tuple: string_template(
+    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+    # list: string_template(
+    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+    # set: string_template(
+    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+    None: ""
+}
+
+return_handler = {
+    int: "\treturn mp_obj_new_int(ret_val);",
+    float: "\treturn mp_obj_new_float(ret_val);",
+    bool: "\treturn mp_obj_new_bool(ret_val);",
+    str: "\treturn mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
+    None: "\treturn mp_const_none;"
+}
+
+shortened_types = {
+    int: "int",
+    object: "obj",
+    None: "null",
+    bool: "bool",
+}
+
+
+def expand_newlines(lst_in):
+    new_list = []
+    for line in lst_in:
+        new_list.extend(line.replace('\t', '    ').split('\n'))
+    return new_list
+
+
+class BaseContainer:
+    def load_c(self, input: str):
+        """
+        :param input: String of c source
+        :return: self
+        """
+        return self
+
+    def load_python(self, input) -> BaseContainer:
+        """
+        :param input: Python Object
+        :return: self
+        """
+        return self
+
+    def to_c(self):
+        """
+        Parse the container into c source code
+        :return:
+        """
+
+    def to_python(self):
+        """
+        Parse the container into python objects
+        :return:
+        """
+
+
+class ModuleContainer:
+    def __init__(self):
+        self.headers = ['#include "py/obj.h"', '#include "py/runtime.h"', '#include "py/builtin.h"']
+        self.functions = []
+
+
+class FunctionContainer(BaseContainer):
+    return_type_handler = {
+        int: "mp_int_t ret_val;",
+        float: "mp_float_t ret_val;",
+        bool: "bool ret_val;",
+        str: None,
+        # tuple: string_template(
+        #     "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        # list: string_template(
+        #     "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        # set: string_template(
+        #     "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        None: None
+    }
+    return_handler = {
+        int: "return mp_obj_new_int(ret_val);",
+        float: "return mp_obj_new_float(ret_val);",
+        bool: "return mp_obj_new_bool(ret_val);",
+        str: "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
+        None: "return mp_const_none;"
+    }
+
+    def __init__(self):
+        self.comments = None
+        self.name = None
+        self.module = None
+        self.parameters: ParametersContainer = ParametersContainer()
+        self.code = None
+        self.return_type = None
+        self.return_value = None
+        self.signature = None
+
+    def load_python(self, input) -> FunctionContainer:
+        """
+        :param input: Function to parse
+        :return:
+        """
+        self.comments = input.__doc__
+        self.name = input.__name__
+        self.module = input.__module__
+        self.signature = inspect.signature(input)
+        self.parameters.load_python(self.signature.parameters)
+        self.return_type = inspect.signature(input).return_annotation
+        return self
+
+    def to_c_comments(self):
+        """
+        Uses single line comments as we can't know if there are string escapes such as /* in the code
+        :param f:
+        :return:
+        """
+        if self.comments:
+            return '\n'.join(["//" + line.strip() for line in self.comments.splitlines() if line.strip()])
+
+    def to_c_func_def(self):
+        return f"STATIC mp_obj_t {self.module}_{self.name}"
+
+    def to_c_return_val_init(self):
+        return self.return_type_handler[self.return_type]
+
+    def to_c_code_body(self):
+        if self.code:
+            return self.code
+        else:
+            return "//Your code here"
+
+    def to_c_return_value(self):
+        if self.return_value is not None:
+            return self.return_value
+        else:
+            return self.return_handler.get(self.return_type)
+
+    def to_c_define(self):
+        if self.parameters.type == "positional":
+            return f"MP_DEFINE_CONST_FUN_OBJ_{self.parameters.count}(" \
+                f"{self.module}_{self.name}_obj, {self.module}_{self.name});"
+        elif self.parameters.type == "between":
+            return f"MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(" \
+                f"{self.module}_{self.name}_obj, " \
+                f"{self.parameters.count}, {self.parameters.count}, {self.module}_{self.name});"
+        elif self.parameters.type == "keyword":
+            return f"MP_DEFINE_CONST_FUN_OBJ_KW({self.module}_{self.name}_obj, 1, {self.module}_{self.name});"
+
+    def to_c_arg_array_def(self):
+        if self.parameters.type == "keyword":
+            return f"STATIC const mp_arg_t {self.module}_{self.name}_allowed_args[]"
+
+    def to_c(self):
+        # TODO work on formatter
+        resp = self.to_c_comments()
+        resp += "\n"
+        resp += f"{self.to_c_func_def()}({self.parameters.to_c_input()}) {{\n"
+        resp += "    " + "\n    ".join(self.parameters.to_c_init().splitlines()) + "\n"
+        if self.to_c_return_val_init():
+            resp += "    " + self.to_c_return_val_init()
+        resp += f"\n\n    {self.to_c_code_body()}\n\n"
+        resp += f"    {self.to_c_return_value()}\n"
+        resp += "}\n"
+        resp += self.to_c_define()
+        return resp
+
+
+class ParametersContainer(BaseContainer):
+    type_handler = {
+        int: string_template("mp_int_t {0} = mp_obj_get_int({0}_obj);"),
+        float: string_template("mp_float_t {0} = mp_obj_get_float({0}_obj);"),
+        bool: string_template("bool {0} = mp_obj_is_true({0}_obj);"),
+        str: string_template("const char* {0} = mp_obj_str_get_str({0}_obj);"),
+        tuple: string_template(
+            "mp_obj_t *{0} = NULL;\nsize_t {0}_len = 0;\nmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        list: string_template(
+            "mp_obj_t *{0} = NULL;\nsize_t {0}_len = 0;\nmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        set: string_template(
+            "mp_obj_t *{0} = NULL;\nsize_t {0}_len = 0;\nmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+        object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
+    }
+
+    def __init__(self):
+        self.type = ""
+        self.count = 0
+        self.parameters = None
+
+    def load_python(self, input: Dict[str, inspect.Parameter]) -> ParametersContainer:
+        self.parameters = input
+        self.count = len(self.parameters)
+        simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in self.parameters.values()])
+        if simple and self.count < 4:
+            self.type = "positional"
+        elif simple:
+            self.type = "between"
+        else:
+            self.type = "keyword"
+        return self
+
+    def to_c_enums(self):
+        if self.type != "keyword":
+            return None
+        return f"enum {{ {', '.join(['ARG_' + k for k in self.parameters])} }};"
+
+    def to_c_kw_allowed_args(self):
+        if self.type == "keyword":
+            args = []
+            for name, param in self.parameters.items():
+                if param.kind in [param.POSITIONAL_OR_KEYWORD, param.POSITIONAL_ONLY]:
+                    arg_type = "MP_ARG_REQUIRED"
+                else:
+                    arg_type = "MP_ARG_KW_ONLY"
+                type_txt = shortened_types[param.annotation]
+                if param.default is inspect._empty:
+                    default = ""
+                elif param.default is None:
+                    default = f"{{ .u_{type_txt} = MP_OBJ_NULL }}"
+                else:
+                    default = f"{{ .u_{type_txt} = {param.default} }}"
+                args.append(f"{{ MP_QSTR_{name}, {arg_type} | MP_ARG_{type_txt.upper()}, {default} }},")
+            return args
+            # return f"\tSTATIC const mp_arg_t {f.__module__}_{f.__name__}_allowed_args[] = {{\n\t\t{args}\n\t}};"
+
+    def to_c_arg_array(self):
+        if self.type != "keyword":
+            return None
+
+    def to_c_kw_arg_unpack(self):
+        if self.type != "keyword":
+            return None
+
+    def to_c_input(self):
+        if self.type == "positional":
+            return ", ".join([f"mp_obj_t {x}_obj" for x in self.parameters])
+        elif self.type == "between":
+            return "size_t n_args, const mp_obj_t *args"
+        elif self.type == "keyword":
+            # Complex case
+            return "size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {"
+
+    def to_c_init(self):
+        if self.type == "keyword":
+            return "\n".join([self.to_c_enums(),
+                              self.to_c_kw_allowed_args(),
+                              "",
+                              self.to_c_arg_array(),
+                              "",
+                              self.to_c_kw_arg_unpack()])
+        else:
+            return "\n".join([self.type_handler[value.annotation](param) for param, value in self.parameters.items()])
+
+
+class ReturnContainer(BaseContainer):
+    pass
 
 
 def stub_function(f):
@@ -87,29 +343,6 @@ def function_init(func_name):
     return f"STATIC mp_obj_t {func_name}("
 
 
-return_type_handler = {
-    int: "\tmp_int_t ret_val;",
-    float: "\tmp_float_t ret_val;",
-    bool: "\tbool ret_val;",
-    str: "",
-    # tuple: string_template(
-    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
-    # list: string_template(
-    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
-    # set: string_template(
-    #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
-    None: ""
-}
-
-return_handler = {
-    int: "\treturn mp_obj_new_int(ret_val);",
-    float: "\treturn mp_obj_new_float(ret_val);",
-    bool: "\treturn mp_obj_new_bool(ret_val);",
-    str: "\treturn mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
-    None: "\treturn mp_const_none;"
-}
-
-
 def ret_val_init(ret_type):
     return return_type_handler[ret_type]
 
@@ -134,14 +367,6 @@ def function_params(params):
 
 def kw_enum(params):
     return f"\tenum {{ {', '.join(['ARG_' + k for k in params])} }};"
-
-
-shortened_types = {
-    int: "int",
-    object: "obj",
-    None: "null",
-    bool: "bool",
-}
 
 
 def kw_allowed_args(f, params):
