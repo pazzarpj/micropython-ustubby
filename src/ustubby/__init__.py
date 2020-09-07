@@ -292,7 +292,7 @@ class ReturnContainer(BaseContainer):
 
 def stub_function(f):
     # Function implementation
-    stub_ret = [function_comments(f), function_init(f"{f.__module__}_{f.__name__}")]
+    stub_ret = ["", function_comments(f), function_init(f"{f.__module__}_{f.__name__}")]
     sig = inspect.signature(f)
     stub_ret[-1] += function_params(sig.parameters)
     stub_ret.extend(parse_params(f, sig.parameters))
@@ -414,11 +414,10 @@ def parse_params(f, params):
 
 
 def headers():
-    return """// Include required definitions first.
+    return '''// Include required definitions first.
 #include "py/obj.h"
 #include "py/runtime.h"
-#include "py/builtin.h"
-"""
+#include "py/builtin.h"'''
 
 
 def function_comments(f):
