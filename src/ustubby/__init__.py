@@ -320,7 +320,7 @@ def stub_module(mod):
     # Set up the module properties
     stub_ret.append("")
     stub_ret.append(f"STATIC const mp_rom_map_elem_t {mod.__name__}_module_globals_table[] = {{")
-    stub_ret.append(f"\t{{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_example) }},")
+    stub_ret.append(f"\t{{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_{mod.__name__}) }},")
     stub_ret.extend(
         [f"\t{{ MP_ROM_QSTR(MP_QSTR_{f.__name__}), MP_ROM_PTR(&{mod.__name__}_{f.__name__}_obj) }}," for f in
          functions])
@@ -335,7 +335,7 @@ def stub_module(mod):
     # Register the module
     stub_ret.append("")
     stub_ret.append(
-        f"MP_REGISTER_MODULE(MP_QSTR_example, {mod.__name__}_user_cmodule, MODULE_{mod.__name__.upper()}_ENABLED);")
+        f"MP_REGISTER_MODULE(MP_QSTR_{mod.__name__}, {mod.__name__}_user_cmodule, MODULE_{mod.__name__.upper()}_ENABLED);")
     return "\n".join(stub_ret)
 
 
