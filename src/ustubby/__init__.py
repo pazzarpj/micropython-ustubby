@@ -292,7 +292,7 @@ class ReturnContainer(BaseContainer):
 
 def stub_function(f):
     # Function implementation
-    stub_ret = [function_comments(f), function_init(f"{f.__module__}_{f.__name__}")]
+    stub_ret = ["", function_comments(f), function_init(f"{f.__module__}_{f.__name__}")]
     sig = inspect.signature(f)
     stub_ret[-1] += function_params(sig.parameters)
     stub_ret.extend(parse_params(f, sig.parameters))
@@ -320,7 +320,7 @@ def stub_module(mod):
     # Set up the module properties
     stub_ret.append("")
     stub_ret.append(f"STATIC const mp_rom_map_elem_t {mod.__name__}_module_globals_table[] = {{")
-    stub_ret.append(f"\t{{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_example) }},")
+    stub_ret.append(f"\t{{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_{mod.__name__}) }},")
     stub_ret.extend(
         [f"\t{{ MP_ROM_QSTR(MP_QSTR_{f.__name__}), MP_ROM_PTR(&{mod.__name__}_{f.__name__}_obj) }}," for f in
          functions])
@@ -335,7 +335,7 @@ def stub_module(mod):
     # Register the module
     stub_ret.append("")
     stub_ret.append(
-        f"MP_REGISTER_MODULE(MP_QSTR_example, {mod.__name__}_user_cmodule, MODULE_{mod.__name__.upper()}_ENABLED);")
+        f"MP_REGISTER_MODULE(MP_QSTR_{mod.__name__}, {mod.__name__}_user_cmodule, MODULE_{mod.__name__.upper()}_ENABLED);")
     return "\n".join(stub_ret)
 
 
@@ -414,11 +414,10 @@ def parse_params(f, params):
 
 
 def headers():
-    return """// Include required definitions first.
+    return '''// Include required definitions first.
 #include "py/obj.h"
 #include "py/runtime.h"
-#include "py/builtin.h"
-"""
+#include "py/builtin.h"'''
 
 
 def function_comments(f):
