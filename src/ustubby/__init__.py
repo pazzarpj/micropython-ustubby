@@ -337,8 +337,16 @@ def stub_function(f):
     return "\n".join(expand_newlines(stub_ret))
 
 
+def module_doc(mod):
+    s = '''// This file was developed using uStubby.
+// https://github.com/pazzarpj/micropython-ustubby
+'''
+    if mod.__doc__ is not None:
+        s += '\n/*'+ mod.__doc__ + '*/\n'
+    return s
+
 def stub_module(mod):
-    stub_ret = [headers()]
+    stub_ret = [module_doc(mod), headers()]
     classes = [o[1] for o in inspect.getmembers(mod) if inspect.isclass(o[1])]
     functions = [o[1] for cls in classes for o in inspect.getmembers(cls) if inspect.isfunction(o[1])]
     functions.extend([o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])])
