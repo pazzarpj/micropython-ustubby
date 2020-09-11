@@ -381,7 +381,7 @@ def ret_val_return(ret_type):
 
 def function_params(params):
     if len(params) == 0:
-        return "() {"
+        return ") {"
     simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
     if simple and len(params) < 4:
         params = ", ".join([f"mp_obj_t {x}_obj" for x in params])
