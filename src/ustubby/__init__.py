@@ -27,12 +27,26 @@ type_handler = {
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
 }
+type_handler_arr = {
+    int: string_template("\tmp_int_t {0} = mp_obj_get_int(args[{1}]);"),
+    float: string_template("\tmp_float_t {0} = mp_obj_get_float(args[{1}]);"),
+    bool: string_template("\tbool {0} = mp_obj_is_true(args[{1}]);"),
+    str: string_template("\tconst char* {0} = mp_obj_str_get_str(args[{1}]);"),
+    tuple: string_template(
+        "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array(args[{1}], &{0}_len, &{0});"),
+    list: string_template(
+        "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array(args[{1}], &{0}_len, &{0});"),
+    set: string_template(
+        "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array(args[{1}], &{0}_len, &{0});"),
+    object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
+}
 
 return_type_handler = {
     int: "\tmp_int_t ret_val;",
     float: "\tmp_float_t ret_val;",
     bool: "\tbool ret_val;",
     str: "",
+    tuple: "",
     # tuple: string_template(
     #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     # list: string_template(
@@ -47,6 +61,14 @@ return_handler = {
     float: "\treturn mp_obj_new_float(ret_val);",
     bool: "\treturn mp_obj_new_bool(ret_val);",
     str: "\treturn mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
+    tuple: '''
+    // signature: mp_obj_t mp_obj_new_tuple(size_t n, const mp_obj_t *items);
+    mp_obj_t ret_val[] = {
+        mp_obj_new_int(123),
+        mp_obj_new_float(456.789),
+        mp_obj_new_str("hello", 5),
+    };
+    return mp_obj_new_tuple(3, ret_val);''',
     None: "\treturn mp_const_none;"
 }
 
@@ -105,6 +127,7 @@ class FunctionContainer(BaseContainer):
         float: "mp_float_t ret_val;",
         bool: "bool ret_val;",
         str: None,
+        tuple: "",
         # tuple: string_template(
         #     "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
         # list: string_template(
@@ -118,6 +141,14 @@ class FunctionContainer(BaseContainer):
         float: "return mp_obj_new_float(ret_val);",
         bool: "return mp_obj_new_bool(ret_val);",
         str: "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
+        tuple: '''
+        // signature: mp_obj_t mp_obj_new_tuple(size_t n, const mp_obj_t *items);
+        mp_obj_t ret_val[] = {
+            mp_obj_new_int(123),
+            mp_obj_new_float(456.789),
+            mp_obj_new_str("hello", 5),
+        };
+        return mp_obj_new_tuple(3, ret_val);''',
         None: "return mp_const_none;"
     }
 
@@ -193,8 +224,8 @@ class FunctionContainer(BaseContainer):
         resp += f"{self.to_c_func_def()}({self.parameters.to_c_input()}) {{\n"
         resp += "    " + "\n    ".join(self.parameters.to_c_init().splitlines()) + "\n"
         if self.to_c_return_val_init():
-            resp += "    " + self.to_c_return_val_init()
-        resp += f"\n\n    {self.to_c_code_body()}\n\n"
+            resp += "    " + self.to_c_return_val_init() + "\n"
+        resp += f"\n    {self.to_c_code_body()}\n\n"
         resp += f"    {self.to_c_return_value()}\n"
         resp += "}\n"
         resp += self.to_c_define()
@@ -214,6 +245,19 @@ class ParametersContainer(BaseContainer):
         set: string_template(
             "mp_obj_t *{0} = NULL;\nsize_t {0}_len = 0;\nmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
         object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
+    }
+    type_handler_arr = {
+        int: string_template("mp_int_t {0} = mp_obj_get_int(args[{1}]);"),
+        float: string_template("mp_float_t {0} = mp_obj_get_float(args[{1}]);"),
+        bool: string_template("bool {0} = mp_obj_is_true(args[{1}]);"),
+        str: string_template("const char* {0} = mp_obj_str_get_str(args[{1}]);"),
+        tuple: string_template(
+            "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array(args[{1}], &{0}_len, &{0});"),
+        list: string_template(
+            "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array(args[{1}], &{0}_len, &{0});"),
+        set: string_template(
+            "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array(args[{1}], &{0}_len, &{0});"),
+        object: string_template("mp_obj_t {0} args[ARG_{0}].u_obj;")
     }
 
     def __init__(self):
@@ -282,6 +326,8 @@ class ParametersContainer(BaseContainer):
                               self.to_c_arg_array(),
                               "",
                               self.to_c_kw_arg_unpack()])
+        elif len(self.parameters) > 3:
+            return "\n".join([self.type_handler_arr[value.annotation](param, index) for index, (param, value) in enumerate(self.parameters.items())])
         else:
             return "\n".join([self.type_handler[value.annotation](param) for param, value in self.parameters.items()])
 
@@ -309,8 +355,16 @@ def stub_function(f):
     return "\n".join(expand_newlines(stub_ret))
 
 
+def module_doc(mod):
+    s = '''// This file was developed using uStubby.
+// https://github.com/pazzarpj/micropython-ustubby
+'''
+    if mod.__doc__ is not None:
+        s += '\n/*'+ mod.__doc__ + '*/\n'
+    return s
+
 def stub_module(mod):
-    stub_ret = [headers()]
+    stub_ret = [module_doc(mod), headers()]
     classes = [o[1] for o in inspect.getmembers(mod) if inspect.isclass(o[1])]
     functions = [o[1] for cls in classes for o in inspect.getmembers(cls) if inspect.isfunction(o[1])]
     functions.extend([o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])])
@@ -348,12 +402,13 @@ def ret_val_init(ret_type):
 
 
 def ret_val_return(ret_type):
+    print('ret_type', ret_type)
     return return_handler[ret_type]
 
 
 def function_params(params):
     if len(params) == 0:
-        return "() {"
+        return ") {"
     simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
     if simple and len(params) < 4:
         params = ", ".join([f"mp_obj_t {x}_obj" for x in params])
@@ -407,6 +462,8 @@ def parse_params(f, params):
     :return: list of strings defining the parsed parameters in c
     """
     simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
+    if simple and len(params) > 3:
+        return [type_handler_arr[value.annotation](param, ind) for ind, (param, value) in enumerate(params.items())]
     if simple:
         return [type_handler[value.annotation](param) for param, value in params.items()]
     else:
