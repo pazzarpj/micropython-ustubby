@@ -9,7 +9,8 @@ def test_basic_example():
         :return:a + b"""
 
     add_ints.__module__ = "example"
-    lines = """//Adds two integers
+    lines = """
+//Adds two integers
 //:param a:
 //:param b:
 //:return:a + b
@@ -87,7 +88,8 @@ def test_readfrom_mem():
         """
 
     readfrom_mem.__module__ = "example"
-    lines = """//
+    lines = """
+//
 //:param addr:
 //:param memaddr:
 //:param arg:
@@ -141,3 +143,103 @@ def test_readfrom_mem_load_function():
     assert func.to_c_return_value() == "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);"
     assert func.to_c_define() == "MP_DEFINE_CONST_FUN_OBJ_KW(example_readfrom_mem_obj, 1, example_readfrom_mem);"
     assert func.to_c_arg_array_def() == "STATIC const mp_arg_t example_readfrom_mem_allowed_args[]"
+
+
+def test_many_positional_arguments():
+    def MahonyAHRSupdate(gx: float, gy: float, gz: float, ax: float, ay: float, az: float, mx: float, my: float,
+                         mz: float) -> None:
+        """
+        :param gx:
+        :param gy:
+        :param gz:
+        :param ax:
+        :param ay:
+        :param az:
+        :param mx:
+        :param my:
+        :param mz:
+        :return:
+        """
+
+    MahonyAHRSupdate.__module__ = "MahonyAHRS"
+    lines = """
+//
+//:param gx:
+//:param gy:
+//:param gz:
+//:param ax:
+//:param ay:
+//:param az:
+//:param mx:
+//:param my:
+//:param mz:
+//:return:
+//
+STATIC mp_obj_t MahonyAHRS_MahonyAHRSupdate(size_t n_args, const mp_obj_t *args) {
+    mp_float_t gx = mp_obj_get_float(args[0]);
+    mp_float_t gy = mp_obj_get_float(args[1]);
+    mp_float_t gz = mp_obj_get_float(args[2]);
+    mp_float_t ax = mp_obj_get_float(args[3]);
+    mp_float_t ay = mp_obj_get_float(args[4]);
+    mp_float_t az = mp_obj_get_float(args[5]);
+    mp_float_t mx = mp_obj_get_float(args[6]);
+    mp_float_t my = mp_obj_get_float(args[7]);
+    mp_float_t mz = mp_obj_get_float(args[8]);
+
+    //Your code here
+
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(MahonyAHRS_MahonyAHRSupdate_obj, 9, 9, MahonyAHRS_MahonyAHRSupdate);""".splitlines()
+    call_lines = ustubby.stub_function(MahonyAHRSupdate).splitlines()
+    for index, line in enumerate(call_lines):
+        assert line == lines[index]
+
+
+def test_many_positional_arguments_function():
+    def MahonyAHRSupdate(gx: float, gy: float, gz: float, ax: float, ay: float, az: float, mx: float, my: float,
+                         mz: float) -> None:
+        """
+        :param gx:
+        :param gy:
+        :param gz:
+        :param ax:
+        :param ay:
+        :param az:
+        :param mx:
+        :param my:
+        :param mz:
+        :return:
+        """
+
+    MahonyAHRSupdate.__module__ = "MahonyAHRS"
+    lines = """//:param gx:
+//:param gy:
+//:param gz:
+//:param ax:
+//:param ay:
+//:param az:
+//:param mx:
+//:param my:
+//:param mz:
+//:return:
+STATIC mp_obj_t MahonyAHRS_MahonyAHRSupdate(size_t n_args, const mp_obj_t *args) {
+    mp_float_t gx = mp_obj_get_float(args[0]);
+    mp_float_t gy = mp_obj_get_float(args[1]);
+    mp_float_t gz = mp_obj_get_float(args[2]);
+    mp_float_t ax = mp_obj_get_float(args[3]);
+    mp_float_t ay = mp_obj_get_float(args[4]);
+    mp_float_t az = mp_obj_get_float(args[5]);
+    mp_float_t mx = mp_obj_get_float(args[6]);
+    mp_float_t my = mp_obj_get_float(args[7]);
+    mp_float_t mz = mp_obj_get_float(args[8]);
+
+    //Your code here
+
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(MahonyAHRS_MahonyAHRSupdate_obj, 9, 9, MahonyAHRS_MahonyAHRSupdate);""".splitlines()
+    func = ustubby.FunctionContainer().load_python(MahonyAHRSupdate)
+    call_lines = func.to_c().splitlines()
+    for index, line in enumerate(lines):
+        assert call_lines[index] == line
