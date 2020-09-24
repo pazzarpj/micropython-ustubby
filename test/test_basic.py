@@ -243,3 +243,25 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(MahonyAHRS_MahonyAHRSupdate_obj, 9, 9, Mahon
     call_lines = func.to_c().splitlines()
     for index, line in enumerate(lines):
         assert call_lines[index] == line
+
+def test_module_comments_no_comment(mocker):
+    mocker.patch("ustubby.__doc__", None)
+    docs = ustubby.module_doc(ustubby)
+    assert docs == """/*This file was auto-generated using uStubby.
+https://github.com/pazzarpj/micropython-ustubby
+*/"""
+
+def test_module_comments_with_comment(mocker):
+    mocker.patch("ustubby.__doc__", """Multi
+line
+comments
+""")
+    docs = ustubby.module_doc(ustubby)
+    assert docs == """/*This file was auto-generated using uStubby.
+https://github.com/pazzarpj/micropython-ustubby
+
+Multi
+line
+comments
+
+*/"""

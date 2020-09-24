@@ -338,12 +338,14 @@ def stub_function(f):
 
 
 def module_doc(mod):
-    s = '''// This file was developed using uStubby.
-// https://github.com/pazzarpj/micropython-ustubby
-'''
+    s = """/*This file was auto-generated using uStubby.
+https://github.com/pazzarpj/micropython-ustubby
+"""
     if mod.__doc__ is not None:
-        s += '\n/*'+ mod.__doc__ + '*/\n'
+        s += "\n" + mod.__doc__ + "\n"
+    s += "*/"
     return s
+
 
 def stub_module(mod):
     stub_ret = [module_doc(mod), headers()]
