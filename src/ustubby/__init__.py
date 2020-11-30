@@ -46,6 +46,7 @@ return_type_handler = {
     float: "\tmp_float_t ret_val;",
     bool: "\tbool ret_val;",
     str: "",
+    tuple: "",
     # tuple: string_template(
     #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     # list: string_template(
@@ -60,6 +61,14 @@ return_handler = {
     float: "\treturn mp_obj_new_float(ret_val);",
     bool: "\treturn mp_obj_new_bool(ret_val);",
     str: "\treturn mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
+    tuple: '''
+    // signature: mp_obj_t mp_obj_new_tuple(size_t n, const mp_obj_t *items);
+    mp_obj_t ret_val[] = {
+        mp_obj_new_int(123),
+        mp_obj_new_float(456.789),
+        mp_obj_new_str("hello", 5),
+    };
+    return mp_obj_new_tuple(3, ret_val);''',
     None: "\treturn mp_const_none;"
 }
 
@@ -118,6 +127,7 @@ class FunctionContainer(BaseContainer):
         float: "mp_float_t ret_val;",
         bool: "bool ret_val;",
         str: None,
+        tuple: "",
         # tuple: string_template(
         #     "mp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
         # list: string_template(
@@ -131,6 +141,14 @@ class FunctionContainer(BaseContainer):
         float: "return mp_obj_new_float(ret_val);",
         bool: "return mp_obj_new_bool(ret_val);",
         str: "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
+        tuple: '''
+        // signature: mp_obj_t mp_obj_new_tuple(size_t n, const mp_obj_t *items);
+        mp_obj_t ret_val[] = {
+            mp_obj_new_int(123),
+            mp_obj_new_float(456.789),
+            mp_obj_new_str("hello", 5),
+        };
+        return mp_obj_new_tuple(3, ret_val);''',
         None: "return mp_const_none;"
     }
 
@@ -337,8 +355,16 @@ def stub_function(f):
     return "\n".join(expand_newlines(stub_ret))
 
 
+def module_doc(mod):
+    s = '''// This file was developed using uStubby.
+// https://github.com/pazzarpj/micropython-ustubby
+'''
+    if mod.__doc__ is not None:
+        s += '\n/*'+ mod.__doc__ + '*/\n'
+    return s
+
 def stub_module(mod):
-    stub_ret = [headers()]
+    stub_ret = [module_doc(mod), headers()]
     classes = [o[1] for o in inspect.getmembers(mod) if inspect.isclass(o[1])]
     functions = [o[1] for cls in classes for o in inspect.getmembers(cls) if inspect.isfunction(o[1])]
     functions.extend([o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])])
@@ -376,12 +402,13 @@ def ret_val_init(ret_type):
 
 
 def ret_val_return(ret_type):
+    print('ret_type', ret_type)
     return return_handler[ret_type]
 
 
 def function_params(params):
     if len(params) == 0:
-        return "() {"
+        return ") {"
     simple = all([param.kind == param.POSITIONAL_OR_KEYWORD for param in params.values()])
     if simple and len(params) < 4:
         params = ", ".join([f"mp_obj_t {x}_obj" for x in params])
