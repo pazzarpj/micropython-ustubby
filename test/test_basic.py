@@ -245,3 +245,27 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(MahonyAHRS_MahonyAHRSupdate_obj, 9, 9, Mahon
     call_lines = func.to_c().splitlines()
     for index, line in enumerate(lines):
         assert call_lines[index] == line
+
+
+def test_zero_arguments():
+    def get_beta() -> float:
+        """
+        def get_beta() -> float:
+        """
+
+    get_beta.__module__ = "madgwick"
+    lines = """
+//
+//def get_beta() -> float:
+//
+STATIC mp_obj_t madgwick_get_beta() {
+    mp_float_t ret_val;
+
+    //Your code here
+
+    return mp_obj_new_float(ret_val);
+}
+MP_DEFINE_CONST_FUN_OBJ_0(madgwick_get_beta_obj, madgwick_get_beta);""".splitlines()
+    call_lines = ustubby.stub_function(get_beta).splitlines()
+    for index, line in enumerate(call_lines):
+        assert line == lines[index]
