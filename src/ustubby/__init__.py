@@ -25,7 +25,8 @@ type_handler = {
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     set: string_template(
         "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
-    object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;")
+    object: string_template("\tmp_obj_t {0} args[ARG_{0}].u_obj;"),
+    "self": string_template("\tSELF_t *self = MP_OBJ_TO_PTR(self_in);"),
 }
 type_handler_arr = {
     int: string_template("\tmp_int_t {0} = mp_obj_get_int(args[{1}]);"),
@@ -77,6 +78,7 @@ shortened_types = {
     object: "obj",
     None: "null",
     bool: "bool",
+    "self": "OBJ",
 }
 
 
@@ -336,12 +338,20 @@ class ReturnContainer(BaseContainer):
     pass
 
 
-def stub_function(f):
+def stub_function(f, self=False):
+    """
+    :param self: first parameter is self
+    """
     # Function implementation
     stub_ret = ["", function_comments(f), function_init(f"{f.__module__}_{f.__name__}")]
     sig = inspect.signature(f)
     stub_ret[-1] += function_params(sig.parameters)
-    stub_ret.extend(parse_params(f, sig.parameters))
+    if self:
+        parameters = dict(sig.parameters)
+        parameters['self'] = inspect.Parameter(name='self', kind=inspect._ParameterKind.POSITIONAL_ONLY, annotation='self')
+    else:
+        parameters = dict(sig.parameters)
+    stub_ret.extend(parse_params(f, parameters))
     ret_init = ret_val_init(sig.return_annotation)
     if ret_init:
         stub_ret.append(ret_init)
@@ -366,8 +376,10 @@ def module_doc(mod):
 def stub_module(mod):
     stub_ret = [module_doc(mod), headers()]
     classes = [o[1] for o in inspect.getmembers(mod) if inspect.isclass(o[1])]
-    functions = [o[1] for cls in classes for o in inspect.getmembers(cls) if inspect.isfunction(o[1])]
-    functions.extend([o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])])
+    members = [o[1] for cls in classes for o in inspect.getmembers(cls) if inspect.isfunction(o[1])]
+    functions = [o[1] for o in inspect.getmembers(mod) if inspect.isfunction(o[1])]
+    for func in members:
+        stub_ret.append(stub_function(func, self=True))
     # Define the functions
     for func in functions:
         stub_ret.append(stub_function(func))
