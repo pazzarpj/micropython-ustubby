@@ -20,11 +20,11 @@ uStubby is targeted to run on Python 3.7, but should run on versions 3.6 or grea
 ### Installing
 
 Currently, there are no external dependencies for running uStubby.
-Clone the repository using git and just put it on the path to install.
-Alternatively, install from PyPI with 
+Install from PyPI with:
 ```bash
 pip install ustubby
 ```
+Alternatively, clone the repository using git and just put it on the path to install.
 
 ## Usage
 This example follows generating the template as shown [here](http://docs.micropython.org/en/latest/develop/cmodules.html#basic-example)
@@ -39,7 +39,14 @@ def add_ints(a: int, b: int) -> int:
     :param b:
     :return:a + b"""
 ```
-We can then convert this into the appropriate c stub by running
+We can then convert this into the appropriate c stub via the CLI:
+```bash
+# This will generate the file "example.c"
+ustubby example.py
+```
+
+Alternatively, you can invoke the python interface in a script:
+
 ```python
 import ustubby
 import example
@@ -150,13 +157,7 @@ def foo(*args, **kwargs):
 MP_DEFINE_CONST_FUN_OBJ_KW
 ```
 Each successively increasing the boiler plate to conveniently accessing the variables.
-Using the same code to parse it
-```python
-import ustubby
-import example
 
-print(ustubby.stub_module(example))
-```
 <details><summary>Output</summary><p>
 
 ```c
