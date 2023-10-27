@@ -58,6 +58,11 @@ setup(
     long_description_content_type="text/markdown",
     package_dir={'': 'src'},
     packages=find_packages('src'),
+    entry_points={
+        'console_scripts': [
+            'ustubby = ustubby.__main__:main'
+        ]
+    },
     url="https://github.com/pazzarpj/micropython-ustubby",
     version=get_version(),
     python_requires='>=3.6',
