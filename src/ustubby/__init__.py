@@ -47,13 +47,18 @@ return_type_handler = {
     float: "\tmp_float_t ret_val;",
     bool: "\tbool ret_val;",
     str: "",
+    bytes: "",
     tuple: "",
+    list: "",
+    dict: "",
+    object: "",
     # tuple: string_template(
     #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     # list: string_template(
     #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
     # set: string_template(
     #     "\tmp_obj_t *{0} = NULL;\n\tsize_t {0}_len = 0;\n\tmp_obj_get_array({0}_arg, &{0}_len, &{0});"),
+    inspect._empty: "",
     None: ""
 }
 
@@ -61,15 +66,38 @@ return_handler = {
     int: "\treturn mp_obj_new_int(ret_val);",
     float: "\treturn mp_obj_new_float(ret_val);",
     bool: "\treturn mp_obj_new_bool(ret_val);",
-    str: "\treturn mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);",
-    tuple: '''
-    // signature: mp_obj_t mp_obj_new_tuple(size_t n, const mp_obj_t *items);
+
+    str: """\t// signature: mp_obj_t mp_obj_new_bytes(const char* data, size_t len);
+    return mp_obj_new_str("hello", 5);""",
+    
+    tuple: '''\t// signature: mp_obj_t mp_obj_new_tuple(size_t n, const mp_obj_t *items);
     mp_obj_t ret_val[] = {
         mp_obj_new_int(123),
         mp_obj_new_float(456.789),
         mp_obj_new_str("hello", 5),
     };
     return mp_obj_new_tuple(3, ret_val);''',
+    
+    bytes:'''\t// signature: mp_obj_t mp_obj_new_bytes(const byte* data, size_t len);
+    return mp_obj_new_bytes("hello", 5);''',
+
+    list: '''\t// signature: mp_obj_t mp_obj_new_list(size_t n, const mp_obj_t *items);
+    mp_obj_t ret_val[] = {
+        mp_obj_new_int(123),
+        mp_obj_new_float(456.789),
+        mp_obj_new_str("hello", 5),
+    };
+    return mp_obj_new_list(3, ret_val);''',
+    
+    dict: '''\tmp_obj_t ret_val = mp_obj_dict(0);
+    mp_obj_dict_store(ret_val, mp_obj_new_str("element1", 8), mp_obj_new_int(123));
+    mp_obj_dict_store(ret_val, mp_obj_new_str("element2", 8), mp_obj_new_float(456.789));
+    mp_obj_dict_store(ret_val, mp_obj_new_str("element3", 8), mp_obj_new_str("hello", 5));
+    return ret_val;''',
+    
+    object: '''\treturn mp_const_none; // TODO''',
+    
+    inspect._empty: "\treturn mp_const_none;",
     None: "\treturn mp_const_none;"
 }
 
@@ -485,7 +513,14 @@ def headers():
     return '''// Include required definitions first.
 #include "py/obj.h"
 #include "py/runtime.h"
-#include "py/builtin.h"'''
+#include "py/builtin.h"
+
+    /*
+    // Example exception for any generated function
+    if (some_val == 0) {
+        mp_raise_ValueError("'some_val' can't be zero!");
+    }
+    */'''
 
 
 def function_comments(f):

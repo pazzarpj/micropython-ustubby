@@ -140,7 +140,9 @@ def test_readfrom_mem_load_function():
     assert func.to_c_func_def() == "STATIC mp_obj_t example_readfrom_mem"
     assert func.to_c_return_val_init() is None
     assert func.to_c_code_body() == "//Your code here"
-    assert func.to_c_return_value() == "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);"
+#   assert func.to_c_return_value() == "return mp_obj_new_str(<ret_val_ptr>, <ret_val_len>);"
+    assert func.to_c_return_value() == """\t// signature: mp_obj_t mp_obj_new_bytes(const char* data, size_t len);\n
+    return mp_obj_new_str("hello", 5);"""
     assert func.to_c_define() == "MP_DEFINE_CONST_FUN_OBJ_KW(example_readfrom_mem_obj, 1, example_readfrom_mem);"
     assert func.to_c_arg_array_def() == "STATIC const mp_arg_t example_readfrom_mem_allowed_args[]"
 
